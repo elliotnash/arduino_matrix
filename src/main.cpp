@@ -2,6 +2,35 @@
 #include <Adafruit_NeoMatrix.h>
 #include <Adafruit_NeoPixel.h>
 
+//TODO refactor to create animation interface
+class AnimationController {
+private:
+    unsigned int _currentFrame = 0;
+    unsigned long _lastFrameTime = 0;
+public:
+    unsigned int frameDuration;
+    unsigned int frameCount;
+    unsigned int currentFrame() const { return _currentFrame; }
+    bool isDone() const { return _currentFrame >= frameCount; }
+    unsigned int duration() const { return frameDuration*frameCount; }
+    bool shouldRender() const { return !isDone() && millis() - _lastFrameTime >= frameDuration; }
+    void setRendered() {
+        _lastFrameTime = millis();
+        _currentFrame++;
+    }
+    void reset() {
+        _currentFrame = 0;
+        _lastFrameTime = 0;
+    }
+    AnimationController(unsigned int frameDuration, unsigned int frameCount) {
+        this->frameDuration = frameDuration;
+        this->frameCount = frameCount;
+    }
+    static AnimationController fromDuration(unsigned int duration, unsigned int frameCount) {
+        return {duration/frameCount, frameCount};
+    }
+};
+
 // Which pin on the Arduino is connected to the NeoPixels?
 #define PIN 2 // On Trinket or Gemma, suggest changing this to 1
 
@@ -23,12 +52,14 @@ void setup() {
     Serial.println("Arduino Connected");
 }
 
-int x    = matrix.width();
-int pass = 0;
+AnimationController animationController = AnimationController(0, 0);
 
 void circleTransition(uint16_t color) {
+    animationController.frameDuration = 40;
+    animationController.frameCount = 11;
+    if (animationController.shouldRender())
     for (int i=0; i<11; i++) {
-        matrix.fillCircle(0, 0, i, color);
+        matrix.fillCircle(0, 0, animationController.currentFrame(), color);
         matrix.show();
         delay(40);
     }
@@ -144,7 +175,7 @@ enum MatrixState {
 };
 
 void randomTransition(uint16_t color) {
-    int transition = random(4);
+    int transition = random(5);
     if (transition == 0) {
         circleTransition(color);
     } else if (transition == 1) {
@@ -192,37 +223,45 @@ void loop() {
     }
 
     if (newState == OFF) {
-        if (newState != state) {
-            randomTransition(0);
-        }
-    } else if (newState == RED) {
-        randomTransition(matrix.Color(random(150, 255), random(100), random(50)));
-    } else if (newState == BLUE) {
-        randomTransition(matrix.Color(random(50), random(125), random(100, 255)));
-    } else if (newState == CONE) {
-        if (newState != state) {
-            randomTransition(coneColor);
-        }
-        delay(400);
+//        if (newState != state) {
+//            randomTransition(0);
+//        }
         matrix.clear();
         matrix.show();
-        delay(100);
+    } else if (newState == RED) {
+//        randomTransition(matrix.Color(random(150, 255), random(100), random(50)));
+        matrix.fillScreen(matrix.Color(random(150, 255), random(100), random(50)));
+        matrix.show();
+    } else if (newState == BLUE) {
+//        randomTransition(matrix.Color(random(50), random(125), random(100, 255)));
+        matrix.fillScreen(matrix.Color(random(50), random(125), random(100, 255)));
+        matrix.show();
+    } else if (newState == CONE) {
+//        if (newState != state) {
+//            randomTransition(coneColor);
+//        }
+//        delay(400);
+//        matrix.clear();
+//        matrix.show();
+//        delay(100);
         matrix.fillScreen(coneColor);
         matrix.show();
     } else if (newState == CUBE) {
-        if (newState != state) {
-            randomTransition(cubeColor);
-        }
-        delay(400);
-        matrix.clear();
-        matrix.show();
-        delay(100);
+//        if (newState != state) {
+//            randomTransition(cubeColor);
+//        }
+//        delay(400);
+//        matrix.clear();
+//        matrix.show();
+//        delay(100);
         matrix.fillScreen(cubeColor);
         matrix.show();
     } else if (newState == MOVING) {
-        if (newState != state) {
-            randomTransition(movingColor);
-        }
+//        if (newState != state) {
+//            randomTransition(movingColor);
+//        }
+        matrix.fillScreen(movingColor);
+        matrix.show();
     }
 
     state = newState;
