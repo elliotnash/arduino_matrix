@@ -56,12 +56,15 @@ RGBColor operator* (const float lhs, const RGBColor rhs)  {
 }
 
 // Which pin on the Arduino is connected to the NeoPixels?
-#define PIN 2 // On Trinket or Gemma, suggest changing this to 1
 
-Adafruit_NeoMatrix matrix = Adafruit_NeoMatrix(8, 8, PIN,
-    NEO_MATRIX_TOP     + NEO_MATRIX_RIGHT +
+Adafruit_NeoMatrix matrix = Adafruit_NeoMatrix(8, 8, 2,
+    NEO_MATRIX_TOP + NEO_MATRIX_RIGHT +
     NEO_MATRIX_COLUMNS + NEO_MATRIX_PROGRESSIVE,
-    NEO_GRB            + NEO_KHZ800);
+    NEO_GRB + NEO_KHZ800);
+
+#define STRIP_LENGTH 60
+
+Adafruit_NeoPixel strip = Adafruit_NeoPixel(STRIP_LENGTH, 3, NEO_GRB + NEO_KHZ800);
 
 void setup() {
     matrix.begin();
@@ -72,23 +75,30 @@ void setup() {
     matrix.clear();
     matrix.show();
 
+    strip.begin();
+    strip.setBrightness(255);
+
+    strip.clear();
+    strip.show();
+
     Serial.begin(9600);
     Serial.println("Arduino Connected");
 }
 
-AnimationController animationController = AnimationController(0, 0);
+AnimationController matrixController = AnimationController(0, 0);
+AnimationController stripController = AnimationController(0, 0);
 
 void circleTransition(RGBColor color) {
-    animationController.setTimings(40, 11);
-    if (animationController.shouldRender()) {
-        matrix.fillCircle(0, 0, animationController.currentFrame(), color.to565());
+    matrixController.setTimings(40, 11);
+    if (matrixController.shouldRender()) {
+        matrix.fillCircle(0, 0, matrixController.currentFrame(), color.to565());
         matrix.show();
-        animationController.setRenderComplete();
+        matrixController.setRenderComplete();
     }
 }
 void snakeTransition(RGBColor color) {
-    animationController.setTimings(10, 64);
-    if (animationController.shouldRender()) {
+    matrixController.setTimings(10, 64);
+    if (matrixController.shouldRender()) {
         uint16_t color565 = color.to565();
         int x = 3;
         int y = 3;
@@ -97,7 +107,7 @@ void snakeTransition(RGBColor color) {
         int direction = 0;
         matrix.drawPixel(x, y, color565);
         matrix.show();
-        for (unsigned int i=0; i<animationController.currentFrame(); i++) {
+        for (unsigned int i=0; i < matrixController.currentFrame(); i++) {
             if (direction == 0) {
                 x++;
                 counter++;
@@ -132,14 +142,14 @@ void snakeTransition(RGBColor color) {
             matrix.drawPixel(x, y, color565);
         }
         matrix.show();
-        animationController.setRenderComplete();
+        matrixController.setRenderComplete();
     }
 }
 
 void triangleTransition(RGBColor color) {
-    animationController.setTimings(100, 4);
-    if (animationController.shouldRender()) {
-        int i = animationController.currentFrame();
+    matrixController.setTimings(100, 4);
+    if (matrixController.shouldRender()) {
+        int i = matrixController.currentFrame();
         uint16_t color565 = color.to565();
 
         matrix.drawLine(3, i, 3-i, 0, color565);
@@ -155,14 +165,14 @@ void triangleTransition(RGBColor color) {
         matrix.drawLine(7-i, 4, 7, 4+i, color565);
 
         matrix.show();
-        animationController.setRenderComplete();
+        matrixController.setRenderComplete();
     }
 }
 
 void interlaceTransition(RGBColor color) {
-    animationController.setTimings(30, 8);
-    if (animationController.shouldRender()) {
-        int i = animationController.currentFrame();
+    matrixController.setTimings(30, 8);
+    if (matrixController.shouldRender()) {
+        int i = matrixController.currentFrame();
 
         for (int j=0; j<8; j++) {
             int y = (j%2==0) ? i : 7-i;
@@ -170,17 +180,17 @@ void interlaceTransition(RGBColor color) {
         }
 
         matrix.show();
-        animationController.setRenderComplete();
+        matrixController.setRenderComplete();
     }
 }
 
-bool done[8][8];
-void sparkleTransition(RGBColor color) {
-    animationController.setTimings(8, 64);
-    if (animationController.shouldRender()) {
-        int i = animationController.currentFrame();
+bool matrixDone[8][8];
+void matrixSparkleTransition(RGBColor color) {
+    matrixController.setTimings(8, 64);
+    if (matrixController.shouldRender()) {
+        int i = matrixController.currentFrame();
         if (i == 0) {
-            for (auto &j : done) {
+            for (auto &j : matrixDone) {
                 for (bool &k : j) {
                     k = false;
                 }
@@ -189,9 +199,9 @@ void sparkleTransition(RGBColor color) {
         int value = random(64-i);
         for (int j=0; j<8; j++) {
             for (int k=0; k<8; k++) {
-                if (!done[j][k]) {
+                if (!matrixDone[j][k]) {
                     if (value == 0) {
-                        done[j][k] = true;
+                        matrixDone[j][k] = true;
                         matrix.drawPixel(j, k, color.to565());
                     }
                     value--;
@@ -199,46 +209,100 @@ void sparkleTransition(RGBColor color) {
             }
         }
         matrix.show();
-        animationController.setRenderComplete();
+        matrixController.setRenderComplete();
+    }
+}
+
+bool stripDone[STRIP_LENGTH];
+void stripSparkleTransition(RGBColor color) {
+    stripController.setTimings(8, 60);
+    if (stripController.shouldRender()) {
+        unsigned int i = stripController.currentFrame();
+        if (i==0) {
+            for (auto &j : stripDone) {
+                j = false;
+            }
+        }
+        int value = random(STRIP_LENGTH-i);
+        for (int j=0; j<STRIP_LENGTH; j++) {
+            if (!stripDone[j]) {
+                if (value == 0) {
+                    stripDone[j] = true;
+                    strip.setPixelColor(j, color.red, color.green, color.blue);
+                }
+                value--;
+            }
+        }
+        strip.show();
+        stripController.setRenderComplete();
+    }
+}
+
+void stripFillTransition(RGBColor color) {
+    stripController.setTimings(8, 60);
+    if (stripController.shouldRender()) {
+        unsigned int i = stripController.currentFrame();
+        strip.setPixelColor(i, color.red, color.green, color.blue);
+        strip.show();
+        stripController.setRenderComplete();
     }
 }
 
 void fadeTransition(RGBColor color) {
-    animationController.setTimings(10, 25);
-    float progress = (float) animationController.currentFrame() / animationController.frameCount;
+    matrixController.setTimings(10, 25);
+    float progress = (float) matrixController.currentFrame() / matrixController.frameCount;
     matrix.fillScreen((progress * color).to565());
     matrix.show();
 }
 
 void blockTransition(unsigned long duration) {
-    animationController.setTimings(duration, 1);
-    if (animationController.shouldRender()) {
-        animationController.setRenderComplete();
+    matrixController.setTimings(duration, 1);
+    if (matrixController.shouldRender()) {
+        matrixController.setRenderComplete();
     }
 }
 
-int transition = 0;
-void randomTransition(RGBColor color) {
-    if (animationController.shouldRender()) {
-        if (animationController.currentFrame() == 0) {
-            transition = (int) random(5);
+int matrixTransition = 0;
+RGBColor matrixColor = RGBColor{};
+void matrixRandomTransition(RGBColor newColor) {
+    if (matrixController.shouldRender()) {
+        if (matrixController.currentFrame() == 0) {
+            matrixTransition = (int) random(5);
+            matrixColor = newColor;
         }
+    }
 
-        if (transition == 0) {
-            circleTransition(color);
-        } else if (transition == 1) {
-            snakeTransition(color);
-        } else if (transition == 2) {
-            triangleTransition(color);
-        } else if (transition == 3) {
-            interlaceTransition(color);
-        } else if (transition == 4) {
-            sparkleTransition(color);
-        }
+    if (matrixTransition == 0) {
+        circleTransition(matrixColor);
+    } else if (matrixTransition == 1) {
+        snakeTransition(matrixColor);
+    } else if (matrixTransition == 2) {
+        triangleTransition(matrixColor);
+    } else if (matrixTransition == 3) {
+        interlaceTransition(matrixColor);
+    } else if (matrixTransition == 4) {
+        matrixSparkleTransition(matrixColor);
     }
 }
 
-enum MatrixState {
+int stripTransition = 0;
+RGBColor stripColor = RGBColor{};
+void stripRandomTransition(RGBColor newColor) {
+    if (stripController.shouldRender()) {
+        if (stripController.currentFrame() == 0) {
+            stripTransition = (int) random(2);
+            stripColor = newColor;
+        }
+    }
+
+    if (stripTransition == 0) {
+        stripSparkleTransition(stripColor);
+    } else if (stripTransition == 1) {
+        stripFillTransition(stripColor);
+    }
+}
+
+enum class MatrixState {
     OFF,
     RED,
     BLUE,
@@ -247,8 +311,18 @@ enum MatrixState {
     MOVING
 };
 
-MatrixState state = OFF;
+enum class BlinkState {
+    TRANSITION,
+    ON,
+    FADE_OFF,
+    OFF,
+    FADE_ON
+};
+
+MatrixState state = MatrixState::OFF;
 MatrixState newState = state;
+
+BlinkState blinkState = BlinkState::TRANSITION;
 
 RGBColor coneColor = RGBColor{255, 210, 0};
 RGBColor cubeColor = RGBColor{150, 25, 255};
@@ -258,72 +332,92 @@ void loop() {
     if (Serial.available() > 0) {
         switch (Serial.read()) {
             case 0x30:
-                newState = OFF;
+                newState = MatrixState::OFF;
+                Serial.println("Got new state: OFF");
                 break;
             case 0x31:
-                newState = RED;
+                newState = MatrixState::RED;
+                Serial.println("Got new state: RED");
                 break;
             case 0x32:
-                newState = BLUE;
+                newState = MatrixState::BLUE;
+                Serial.println("Got new state: BLUE");
                 break;
             case 0x33:
-                newState = CONE;
+                newState = MatrixState::CONE;
+                Serial.println("Got new state: CONE");
                 break;
             case 0x34:
-                newState = CUBE;
+                newState = MatrixState::CUBE;
+                Serial.println("Got new state: CUBE");
                 break;
             case 0x35:
-                newState = MOVING;
+                newState = MatrixState::MOVING;
+                Serial.println("Got new state: MOVING");
             default:
                 Serial.println("Unknown input");
                 break;
         }
     }
 
-    if (animationController.isDone() && state != newState) {
-        animationController.reset();
+    if (matrixController.isDone() && stripController.isDone() && state != newState) {
+        Serial.println("Starting animation");
+        matrixController.reset();
+        stripController.reset();
         state = newState;
     }
 
-    if (state == OFF) {
-        randomTransition(RGBColor{0, 0, 0});
-//        matrix.clear();
-//        matrix.show();
-    } else if (state == RED) {
-        randomTransition(RGBColor{
-            (unsigned char) random(150, 255),
-            (unsigned char) random(100),
-            (unsigned char) random(50)
-        });
-//        matrix.fillScreen(matrix.Color(random(150, 255), random(100), random(50)));
-//        matrix.show();
-    } else if (state == BLUE) {
-        randomTransition(RGBColor{
-            (unsigned char) random(50),
-            (unsigned char) random(125),
-            (unsigned char) random(100, 255)
-        });
-//        matrix.fillScreen(matrix.Color(random(50), random(125), random(100, 255)));
-//        matrix.show();
-    } else if (state == CONE) {
-        randomTransition(coneColor);
+    if (state == MatrixState::OFF) {
+        stripRandomTransition(RGBColor{0, 0, 0});
+        matrixRandomTransition(RGBColor{0, 0, 0});
+    } else if (state == MatrixState::RED) {
+        if (matrixController.isDone() && state == newState) {
+            matrixController.reset();
+        }
+        if (stripController.isDone() && state == newState) {
+            stripController.reset();
+        }
+        RGBColor redColor = RGBColor{
+                (unsigned char) random(150, 255),
+                (unsigned char) random(100),
+                (unsigned char) random(50)
+        };
+        stripRandomTransition(redColor);
+        matrixRandomTransition(redColor);
+    } else if (state == MatrixState::BLUE) {
+        if (matrixController.isDone() && state == newState) {
+            matrixController.reset();
+        }
+        if (stripController.isDone() && state == newState) {
+            stripController.reset();
+        }
+        RGBColor blueColor = RGBColor{
+                (unsigned char) random(50),
+                (unsigned char) random(125),
+                (unsigned char) random(100, 255)
+        };
+        stripRandomTransition(blueColor);
+        matrixRandomTransition(blueColor);
+    } else if (state == MatrixState::CONE) {
+        stripRandomTransition(coneColor);
+        matrixRandomTransition(coneColor);
 //        delay(400);
 //        matrix.clear();
 //        matrix.show();
 //        delay(100);
 //        matrix.fillScreen(coneColor);
 //        matrix.show();
-    } else if (state == CUBE) {
-        randomTransition(cubeColor);
+    } else if (state == MatrixState::CUBE) {
+        stripRandomTransition(cubeColor);
+        matrixRandomTransition(cubeColor);
 //        delay(400);
 //        matrix.clear();
 //        matrix.show();
 //        delay(100);
 //        matrix.fillScreen(cubeColor);
 //        matrix.show();
-    } else if (state == MOVING) {
-        randomTransition(movingColor);
-//        matrix.fillScreen(movingColor);
-//        matrix.show();
+    } else if (state == MatrixState::MOVING) {
+        stripRandomTransition(movingColor);
+        matrixRandomTransition(movingColor);
     }
 }
